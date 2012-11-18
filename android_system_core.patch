@@ -1,0 +1,13 @@
+diff --git a/rootdir/init.rc b/rootdir/init.rc
+index efff072..b687792 100644
+--- a/rootdir/init.rc
++++ b/rootdir/init.rc
+@@ -438,8 +438,6 @@ service media /system/bin/mediaserver
+ 
+ service bootanim /system/bin/bootanimation
+     class main
+-    user graphics
+-    group graphics
+     disabled
+     oneshot
+ 

@@ -1,0 +1,32 @@
+diff --git a/libgralloc-qsd8k/Android.mk b/libgralloc-qsd8k/Android.mk
+index ed76ffb..4f7509b 100644
+--- a/libgralloc-qsd8k/Android.mk
++++ b/libgralloc-qsd8k/Android.mk
+@@ -35,6 +35,11 @@ LOCAL_CFLAGS:= -DLOG_TAG=\"$(TARGET_BOARD_PLATFORM).gralloc\"
+ ifeq ($(TARGET_GRALLOC_USES_ASHMEM),true)
+ LOCAL_CFLAGS += -DUSE_ASHMEM
+ endif
++
++ifeq ($(BOARD_HTC_3D_SUPPORT),true)
++   LOCAL_CFLAGS += -DHTC_3D_SUPPORT
++endif
++
+ include $(BUILD_SHARED_LIBRARY)
+ 
+ # Build a host library for testing
+diff --git a/libgralloc-qsd8k/gpu.cpp b/libgralloc-qsd8k/gpu.cpp
+index f318713..307b5cd 100644
+--- a/libgralloc-qsd8k/gpu.cpp
++++ b/libgralloc-qsd8k/gpu.cpp
+@@ -341,6 +341,11 @@ int gpu_context_t::alloc_impl(int w, int h, int format, int usage,
+     getGrallocInformationFromFormat(format, &colorFormat, &bufferType);
+ 
+     switch (colorFormat) {
++#ifdef HTC_3D_SUPPORT       // HTC EVO 3D uses mode '96' for it's 3D panel, eve
++        case 96:
++            size = alignedw * alignedh * 4;
++            break;
++#endif
+         case HAL_PIXEL_FORMAT_RGBA_8888:
+         case HAL_PIXEL_FORMAT_RGBX_8888:
+         case HAL_PIXEL_FORMAT_BGRA_8888:

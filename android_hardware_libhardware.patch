@@ -1,0 +1,43 @@
+diff --git a/include/hardware/camera.h b/include/hardware/camera.h
+index b7182f8..1fa9a48 100644
+--- a/include/hardware/camera.h
++++ b/include/hardware/camera.h
+@@ -75,6 +75,9 @@ typedef struct preview_stream_ops {
+     int (*cancel_buffer)(struct preview_stream_ops* w,
+                 buffer_handle_t* buffer);
+     int (*set_buffer_count)(struct preview_stream_ops* w, int count);
++#ifdef QCOM_HARDWARE
++    int (*set_3d_mode)(const struct preview_stream_ops *w, int r1, int r2, int r3);
++#endif
+     int (*set_buffers_geometry)(struct preview_stream_ops* pw,
+                 int w, int h, int format);
+     int (*set_crop)(struct preview_stream_ops *w,
+diff --git a/modules/gralloc/Android.mk b/modules/gralloc/Android.mk
+index b24c4cd..bfc401b 100644
+--- a/modules/gralloc/Android.mk
++++ b/modules/gralloc/Android.mk
+@@ -30,4 +30,8 @@ LOCAL_SRC_FILES := 	\
+ LOCAL_MODULE := gralloc.default
+ LOCAL_CFLAGS:= -DLOG_TAG=\"gralloc\"
+ 
++ifeq ($(BOARD_HTC_3D_SUPPORT),true)
++   LOCAL_CFLAGS += -DHTC_3D_SUPPORT
++endif
++
+ include $(BUILD_SHARED_LIBRARY)
+diff --git a/modules/gralloc/gralloc.cpp b/modules/gralloc/gralloc.cpp
+index a6b4edd..e340a9e 100644
+--- a/modules/gralloc/gralloc.cpp
++++ b/modules/gralloc/gralloc.cpp
+@@ -208,6 +208,11 @@ static int gralloc_alloc(alloc_device_t* dev,
+     int align = 4;
+     int bpp = 0;
+     switch (format) {
++#ifdef HTC_3D_SUPPORT   // HTC uses mode 96 for 3D camera
++        case 96:
++            bpp = 4;
++            break;
++#endif
+         case HAL_PIXEL_FORMAT_RGBA_8888:
+         case HAL_PIXEL_FORMAT_RGBX_8888:
+         case HAL_PIXEL_FORMAT_BGRA_8888:

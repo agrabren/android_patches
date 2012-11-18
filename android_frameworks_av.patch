@@ -1,0 +1,224 @@
+diff --git a/camera/CameraParameters.cpp b/camera/CameraParameters.cpp
+index 32817e0..efb56ad 100644
+--- a/camera/CameraParameters.cpp
++++ b/camera/CameraParameters.cpp
+@@ -62,6 +62,7 @@ const char CameraParameters::KEY_SUPPORTED_CAPTURE_MODES[] = "capture-mode-value
+ const char CameraParameters::KEY_PICTURE_SIZE[] = "picture-size";
+ const char CameraParameters::KEY_SUPPORTED_PICTURE_SIZES[] = "picture-size-values";
+ const char CameraParameters::KEY_PICTURE_FORMAT[] = "picture-format";
++const char CameraParameters::KEY_SUPPORTED_3D_FILE_FORMAT[] = "3d-file-format";
+ const char CameraParameters::KEY_SUPPORTED_PICTURE_FORMATS[] = "picture-format-values";
+ const char CameraParameters::KEY_JPEG_THUMBNAIL_WIDTH[] = "jpeg-thumbnail-width";
+ const char CameraParameters::KEY_JPEG_THUMBNAIL_HEIGHT[] = "jpeg-thumbnail-height";
+@@ -348,6 +349,9 @@ const char CameraParameters::SELECTABLE_ZONE_AF_FRAME_AVERAGE[] = "frame-average
+ const char CameraParameters::FACE_DETECTION_OFF[] = "off";
+ const char CameraParameters::FACE_DETECTION_ON[] = "on";
+ 
++const char CameraParameters::FILE_FORMAT_MPO[] = "mpo";
++const char CameraParameters::FILE_FORMAT_JPS[] = "jps";
++
+ // Values for MCE settings.
+ const char CameraParameters::MCE_ENABLE[] = "enable";
+ const char CameraParameters::MCE_DISABLE[] = "disable";
+@@ -725,6 +729,11 @@ void CameraParameters::getSupportedPictureSizes(Vector<Size> &sizes) const
+     parseSizesList(pictureSizesStr, sizes);
+ }
+ 
++void CameraParameters::set3DFileFormat(const char *format)
++{
++    set(KEY_SUPPORTED_3D_FILE_FORMAT, format);
++}
++
+ void CameraParameters::setPictureFormat(const char *format)
+ {
+     set(KEY_PICTURE_FORMAT, format);
+diff --git a/include/camera/CameraParameters.h b/include/camera/CameraParameters.h
+index c753380..d569f0e 100644
+--- a/include/camera/CameraParameters.h
++++ b/include/camera/CameraParameters.h
+@@ -114,6 +114,7 @@ public:
+     void setPictureSize(int width, int height);
+     void getPictureSize(int *width, int *height) const;
+     void getSupportedPictureSizes(Vector<Size> &sizes) const;
++    void set3DFileFormat(const char* buffer);
+     void setPictureFormat(const char *format);
+     const char *getPictureFormat() const;
+ #ifdef QCOM_HARDWARE
+@@ -197,6 +198,8 @@ public:
+     // Supported dimensions for captured pictures in pixels.
+     // Example value: "2048x1536,1024x768". Read only.
+     static const char KEY_SUPPORTED_PICTURE_SIZES[];
++    //HTC 3D color format
++    static const char KEY_SUPPORTED_3D_FILE_FORMAT[];
+     // The image format for captured pictures. See CAMERA_MSG_COMPRESSED_IMAGE
+     // in frameworks/base/include/camera/Camera.h.
+     // Example value: "jpeg" or PIXEL_FORMAT_XXX constants. Read/write.
+@@ -884,6 +887,10 @@ public:
+     static const char FACE_DETECTION_OFF[];
+     static const char FACE_DETECTION_ON[];
+ 
++    // Values for HTC 3D image settings.
++    static const char FILE_FORMAT_MPO[];
++    static const char FILE_FORMAT_JPS[];
++
+     // Values for MCE settings.
+     static const char MCE_ENABLE[];
+     static const char MCE_DISABLE[];
+diff --git a/media/libstagefright/Android.mk b/media/libstagefright/Android.mk
+index 239ef00..3d0fd44 100644
+--- a/media/libstagefright/Android.mk
++++ b/media/libstagefright/Android.mk
+@@ -9,6 +9,10 @@ endif
+ 
+ include frameworks/av/media/libstagefright/codecs/common/Config.mk
+ 
++ifeq ($(BOARD_HTC_3D_SUPPORT),true)
++   LOCAL_CFLAGS += -DHTC_3D_SUPPORT
++endif
++
+ ifeq ($(TARGET_SOC),exynos4210)
+ LOCAL_CFLAGS += -DCONFIG_MFC_FPS
+ endif
+diff --git a/media/libstagefright/CameraSource.cpp b/media/libstagefright/CameraSource.cpp
+index 57e3a43..d41c400 100755
+--- a/media/libstagefright/CameraSource.cpp
++++ b/media/libstagefright/CameraSource.cpp
+@@ -343,11 +343,13 @@ status_t CameraSource::configureCamera(
+         ALOGV("Supported frame rates: %s", supportedFrameRates);
+         char buf[4];
+         snprintf(buf, 4, "%d", frameRate);
++#ifndef HTC_3D_SUPPORT  // HTC uses invalid frame rates intentionally on the 3D camera
+         if (strstr(supportedFrameRates, buf) == NULL) {
+             ALOGE("Requested frame rate (%d) is not supported: %s",
+                 frameRate, supportedFrameRates);
+             return BAD_VALUE;
+         }
++#endif
+ 
+         // The frame rate is supported, set the camera to the requested value.
+         params->setPreviewFrameRate(frameRate);
+@@ -445,11 +447,13 @@ status_t CameraSource::checkFrameRate(
+ 
+     // Check the actual video frame rate against the target/requested
+     // video frame rate.
++#ifndef HTC_3D_SUPPORT  // HTC uses invalid frame rates intentionally on the 3D camera
+     if (frameRate != -1 && (frameRateActual - frameRate) != 0) {
+         ALOGE("Failed to set preview frame rate to %d fps. The actual "
+                 "frame rate is %d", frameRate, frameRateActual);
+         return UNKNOWN_ERROR;
+     }
++#endif
+ 
+     // Good now.
+     mVideoFrameRate = frameRateActual;
+diff --git a/media/libstagefright/OMXCodec.cpp b/media/libstagefright/OMXCodec.cpp
+index 40893b3..2973c84 100644
+--- a/media/libstagefright/OMXCodec.cpp
++++ b/media/libstagefright/OMXCodec.cpp
+@@ -272,6 +272,32 @@ void OMXCodec::findMatchingCodecs(
+ uint32_t OMXCodec::getComponentQuirks(
+         const MediaCodecList *list, size_t index) {
+     uint32_t quirks = 0;
++
++    if (list->codecHasQuirk(
++                index, "needs-flush-before-disable")) {
++        quirks |= kNeedsFlushBeforeDisable;
++    }
++    if (list->codecHasQuirk(
++                index, "requires-flush-complete-emulation")) {
++        quirks |= kRequiresFlushCompleteEmulation;
++    }
++    if (list->codecHasQuirk(
++                index, "supports-multiple-frames-per-input-buffer")) {
++        quirks |= kSupportsMultipleFramesPerInputBuffer;
++    }
++    if (list->codecHasQuirk(
++                index, "input-buffer-sizes-are-bogus")) {
++        quirks |= kInputBufferSizesAreBogus;
++    }
++    if (list->codecHasQuirk(
++                index, "avoid-memcopy-input-recording-frames")) {
++        quirks |= kAvoidMemcopyInputRecordingFrames;
++    }
++    if (list->codecHasQuirk(
++                index, "requires-larger-encoder-output-buffer")) {
++        quirks |= kRequiresLargerEncoderOutputBuffer;
++    }
++
+     if (list->codecHasQuirk(
+                 index, "requires-allocate-on-input-ports")) {
+         quirks |= kRequiresAllocateBufferOnInputPorts;
+@@ -286,7 +312,7 @@ uint32_t OMXCodec::getComponentQuirks(
+     }
+     if (list->codecHasQuirk(
+                 index, "requires-loaded-to-idle-after-allocation")) {
+-      quirks |= kRequiresLoadedToIdleAfterAllocation;
++        quirks |= kRequiresLoadedToIdleAfterAllocation;
+     }
+     if (list->codecHasQuirk(
+                 index, "defers-output-buffer-allocation")) {
+@@ -302,6 +328,10 @@ uint32_t OMXCodec::getComponentQuirks(
+     }
+ #ifdef QCOM_HARDWARE
+     if (list->codecHasQuirk(
++                index, "defers-output-buffer-allocation")) {
++        quirks |= kDefersOutputBufferAllocation;
++    }
++    if (list->codecHasQuirk(
+                 index, "requires-global-flush")) {
+         quirks |= kRequiresGlobalFlush;
+     }
+diff --git a/services/camera/libcameraservice/Android.mk b/services/camera/libcameraservice/Android.mk
+index b6d6e87..8031d9a 100644
+--- a/services/camera/libcameraservice/Android.mk
++++ b/services/camera/libcameraservice/Android.mk
+@@ -20,6 +20,10 @@ LOCAL_SHARED_LIBRARIES:= \
+     libgui \
+     libhardware
+ 
++ifeq ($(BOARD_HTC_3D_SUPPORT),true)
++   LOCAL_CFLAGS += -DHTC_3D_SUPPORT
++endif
++
+ ifeq ($(BOARD_USE_SAMSUNG_V4L2_ION), true)
+ LOCAL_CFLAGS += -DBOARD_USE_SAMSUNG_V4L2_ION
+ endif
+diff --git a/services/camera/libcameraservice/CameraHardwareInterface.h b/services/camera/libcameraservice/CameraHardwareInterface.h
+index a340091..f7958e8 100755
+--- a/services/camera/libcameraservice/CameraHardwareInterface.h
++++ b/services/camera/libcameraservice/CameraHardwareInterface.h
+@@ -664,6 +664,9 @@ private:
+ 
+     static int __set_usage(struct preview_stream_ops* w, int usage)
+     {
++#ifdef HTC_3D_SUPPORT
++		usage |= GRALLOC_USAGE_PRIVATE_0;
++#endif
+         ANativeWindow *a = anw(w);
+         return native_window_set_usage(a, usage);
+     }
+@@ -682,6 +685,14 @@ private:
+         return a->query(a, NATIVE_WINDOW_MIN_UNDEQUEUED_BUFFERS, count);
+     }
+ 
++#ifdef HTC_3D_SUPPORT
++    static int __set_3d_mode(
++                      const struct preview_stream_ops *w, int r1, int r2, int r3)
++    {
++        return 0;
++    }
++#endif
++
+     void initHalPreviewWindow()
+     {
+         mHalPreviewWindow.nw.cancel_buffer = __cancel_buffer;
+@@ -689,6 +700,9 @@ private:
+         mHalPreviewWindow.nw.dequeue_buffer = __dequeue_buffer;
+         mHalPreviewWindow.nw.enqueue_buffer = __enqueue_buffer;
+         mHalPreviewWindow.nw.set_buffer_count = __set_buffer_count;
++#ifdef HTC_3D_SUPPORT
++        mHalPreviewWindow.nw.set_3d_mode = __set_3d_mode;
++#endif
+         mHalPreviewWindow.nw.set_buffers_geometry = __set_buffers_geometry;
+         mHalPreviewWindow.nw.set_crop = __set_crop;
+         mHalPreviewWindow.nw.set_timestamp = __set_timestamp;

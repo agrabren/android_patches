@@ -1,0 +1,271 @@
+diff --git a/cmds/bootanimation/BootAnimation.cpp b/cmds/bootanimation/BootAnimation.cpp
+index a0733c9..7e58d18 100644
+--- a/cmds/bootanimation/BootAnimation.cpp
++++ b/cmds/bootanimation/BootAnimation.cpp
+@@ -465,7 +465,17 @@ bool BootAnimation::movie()
+             part.path = path;
+             animation.parts.add(part);
+         }
+-
++        if (l[0] == 'd' && l[1] == '3') {
++            ALOGI("Boot animation in 3D, switching modes");
++            // We're a 3D animation
++
++            FILE* out = fopen("/sys/devices/platform/panel_3d/3D_mode", "wt");
++            if (out)
++            {
++                fprintf(out, "2\n");
++                fclose(out);
++            }
++        }
+         s = ++endl;
+     }
+ 
+diff --git a/core/java/android/net/DhcpInfo.java b/core/java/android/net/DhcpInfo.java
+index e2660e4..95eea89b 100644
+--- a/core/java/android/net/DhcpInfo.java
++++ b/core/java/android/net/DhcpInfo.java
+@@ -30,6 +30,8 @@ public class DhcpInfo implements Parcelable {
+ 
+     public int dns1;
+     public int dns2;
++    public int dns3;
++    public int dns4;
+ 
+     public int serverAddress;
+     public int leaseDuration;
+@@ -46,6 +48,8 @@ public class DhcpInfo implements Parcelable {
+             netmask = source.netmask;
+             dns1 = source.dns1;
+             dns2 = source.dns2;
++            dns3 = source.dns3;
++            dns4 = source.dns4;
+             serverAddress = source.serverAddress;
+             leaseDuration = source.leaseDuration;
+         }
+@@ -59,6 +63,8 @@ public class DhcpInfo implements Parcelable {
+         str.append(" netmask "); putAddress(str, netmask);
+         str.append(" dns1 "); putAddress(str, dns1);
+         str.append(" dns2 "); putAddress(str, dns2);
++        str.append(" dns3 "); putAddress(str, dns3);
++        str.append(" dns4 "); putAddress(str, dns4);
+         str.append(" DHCP server "); putAddress(str, serverAddress);
+         str.append(" lease ").append(leaseDuration).append(" seconds");
+ 
+@@ -81,6 +87,8 @@ public class DhcpInfo implements Parcelable {
+         dest.writeInt(netmask);
+         dest.writeInt(dns1);
+         dest.writeInt(dns2);
++        dest.writeInt(dns3);
++        dest.writeInt(dns4);
+         dest.writeInt(serverAddress);
+         dest.writeInt(leaseDuration);
+     }
+@@ -95,6 +103,8 @@ public class DhcpInfo implements Parcelable {
+                 info.netmask = in.readInt();
+                 info.dns1 = in.readInt();
+                 info.dns2 = in.readInt();
++                info.dns3 = in.readInt();
++                info.dns4 = in.readInt();
+                 info.serverAddress = in.readInt();
+                 info.leaseDuration = in.readInt();
+                 return info;
+diff --git a/core/java/android/net/NetworkInfo.java b/core/java/android/net/NetworkInfo.java
+index 0bc6b58..15171e8 100644
+--- a/core/java/android/net/NetworkInfo.java
++++ b/core/java/android/net/NetworkInfo.java
+@@ -120,6 +120,8 @@ public class NetworkInfo implements Parcelable {
+      */
+     private boolean mIsAvailable;
+ 
++    private String mInterfaceName;
++
+     /**
+      * @param type network type
+      * @deprecated
+@@ -388,6 +390,20 @@ public class NetworkInfo implements Parcelable {
+         }
+     }
+ 
++    /**
++     * @hide
++     */
++    public void setInterface(String paramString) {
++        this.mInterfaceName = paramString;
++    }
++
++    /**
++     * @hide
++     */
++    public String getInterface() {
++        return this.mInterfaceName;
++    }
++
+     @Override
+     public String toString() {
+         synchronized (this) {
+diff --git a/core/java/android/net/NetworkUtils.java b/core/java/android/net/NetworkUtils.java
+index d39e741..59b6dc2 100644
+--- a/core/java/android/net/NetworkUtils.java
++++ b/core/java/android/net/NetworkUtils.java
+@@ -103,6 +103,21 @@ public class NetworkUtils {
+     public native static String getDhcpError();
+ 
+     /**
++     * {@hide}
++     */
++    public native static int addRoutingRule(String param1, String param2, String param3, int param4);
++
++    /**
++     * {@hide}
++     */
++    public native static int delRoutingRule(String param1, String param2, String param3, int param4); 
++
++    /**
++     * {@hide}
++     */
++    public native static int addRoutingTable(String param1, String param2, String param3); 
++
++    /**
+      * Convert a IPv4 address from an integer to an InetAddress.
+      * @param hostAddress an int corresponding to the IPv4 address in network byte order
+      */
+diff --git a/core/java/android/net/wimax/WimaxManagerConstants.java b/core/java/android/net/wimax/WimaxManagerConstants.java
+index adb7166..a39a124 100644
+--- a/core/java/android/net/wimax/WimaxManagerConstants.java
++++ b/core/java/android/net/wimax/WimaxManagerConstants.java
+@@ -1,3 +1,20 @@
++/*
++ * Copyright (C) 2011 The Android Open Source Project
++ * Copyright (C) 2011 The CyanogenMod Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
+ package android.net.wimax;
+ 
+ /**
+@@ -47,7 +64,7 @@ public class WimaxManagerConstants
+      * scanning, connecting, connected, disconnecting, disconnected
+      * initializing, initialized, unknown and ready.
+      */
+-    public static final String EXTRA_WIMAX_STATE = "WimaxState";
++    public static final String EXTRA_WIMAX_STATE = "4g_state";
+     public static final String EXTRA_WIMAX_STATE_INT = "WimaxStateInt";
+     /**
+      * The lookup key for an int that indicates whether state of Wimax
+@@ -113,6 +130,34 @@ public class WimaxManagerConstants
+     /**
+      * Constants for HTC/SQN WiMAX implementation
+      */
++    public static final int WIMAX_ENABLED_STATE_DISABLING = 0;
++
++    public static final int WIMAX_ENABLED_STATE_DISABLED = 1;
++
++    public static final int WIMAX_ENABLED_STATE_ENABLING = 2;
++
++    public static final int WIMAX_ENABLED_STATE_ENABLED = 3;
++
++    public static final int WIMAX_ENABLED_STATE_UNKNOWN = 4;
++
+     public static final String WIMAX_ENABLED_CHANGED_ACTION = "com.htc.net.wimax.WIMAX_ENABLED_CHANGED";
+-    public static final String CURRENT_WIMAX_ENABLED_STATE  = "curWimaxEnabledState";
++
++    public static final String CURRENT_WIMAX_ENABLED_STATE = "curWimaxEnabledState";
++
++    public static final String PREVIOUS_WIMAX_ENABLED_STATE = "preWimaxEnabledState";
++
++    public static final String NETWORK_STATE_CHANGED_ACTION = "com.htc.net.wimax.STATE_CHANGE";
++
++    public static final String SCAN_RESULTS_AVAILABLE_ACTION = "com.htc.net.wimax.SCAN_RESULTS_AVAILABLE";
++
++    public static final String RSSI_CHANGED_ACTION = "com.htc.net.wimax.RSSI_CHANGED";
++
++    public static final String EXTRA_NETWORK_INFO = "networkInfo";
++
++    public static final String EXTRA_NEW_RSSI_LEVEL = "newRssiLevel";
++
++    public static final String EXTRA_NEW_STATE = "newState";
++
++    public static final String EXTRA_WIMAX_STATUS = "wimax_status";
++
+ }
+diff --git a/core/jni/android_net_NetUtils.cpp b/core/jni/android_net_NetUtils.cpp
+index 1f2b1ae..5162dbc 100644
+--- a/core/jni/android_net_NetUtils.cpp
++++ b/core/jni/android_net_NetUtils.cpp
+@@ -108,6 +108,37 @@ static jint android_net_utils_resetConnections(JNIEnv* env, jobject clazz,
+     return (jint)result;
+ }
+ 
++#ifdef BOARD_HAVE_SQN_WIMAX
++static jint android_net_utils_addRoutingRule(JNIEnv* env,
++        jobject clazz,
++        jstring param1,
++        jstring param2,
++        jstring param3,
++        jint param4) {
++        int result = 0;
++        return (jint)result;
++}
++
++static jint android_net_utils_delRoutingRule(JNIEnv* env,
++        jobject clazz,
++        jstring param1,
++        jstring param2,
++        jstring param3,
++        jint param4) {
++        int result = 0;
++        return (jint)result;
++}
++
++static jint android_net_utils_addRoutingTable(JNIEnv* env,
++        jobject clazz,
++        jstring param1,
++        jstring param2,
++        jstring param3) {
++        int result = 0;
++        return (jint)result;
++}
++#endif
++
+ static jboolean android_net_utils_runDhcpCommon(JNIEnv* env, jobject clazz, jstring ifname,
+         jobject info, bool renew)
+ {
+@@ -222,6 +253,11 @@ static JNINativeMethod gNetworkUtilMethods[] = {
+     { "stopDhcp", "(Ljava/lang/String;)Z",  (void *)android_net_utils_stopDhcp },
+     { "releaseDhcpLease", "(Ljava/lang/String;)Z",  (void *)android_net_utils_releaseDhcpLease },
+     { "getDhcpError", "()Ljava/lang/String;", (void*) android_net_utils_getDhcpError },
++#ifdef BOARD_HAVE_SQN_WIMAX
++    { "addRoutingRule", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)I", (void*) android_net_utils_addRoutingRule },
++    { "delRoutingRule", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)I", (void*) android_net_utils_delRoutingRule },
++    { "addRoutingTable", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I", (void*) android_net_utils_addRoutingTable },
++#endif
+ };
+ 
+ int register_android_net_NetworkUtils(JNIEnv* env)
+diff --git a/core/res/res/drawable-hdpi/stat_sys_adb.png a/core/res/res/drawable-hdpi/stat_sys_adb.png
+index 6c1bd0e..0f3bf68 100644
+Binary files core/res/res/drawable-hdpi/stat_sys_adb.png and core/res/res/drawable-hdpi/stat_sys_adb.png differ
+diff --git a/core/res/res/values/config.xml b/core/res/res/values/config.xml
+index 1115e22..68bbcf6 100755
+--- a/core/res/res/values/config.xml
++++ b/core/res/res/values/config.xml
+@@ -34,6 +34,7 @@
+        <item><xliff:g id="id">mute</xliff:g></item>
+        <item><xliff:g id="id">volume</xliff:g></item>
+        <item><xliff:g id="id">wifi</xliff:g></item>
++       <item><xliff:g id="id">wimax</xliff:g></item>
+        <item><xliff:g id="id">cdma_eri</xliff:g></item>
+        <item><xliff:g id="id">data_connection</xliff:g></item>
+        <item><xliff:g id="id">phone_evdo_signal</xliff:g></item>

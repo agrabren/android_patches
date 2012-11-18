@@ -1,0 +1,76 @@
+diff --git a/products/AndroidProducts.mk b/products/AndroidProducts.mk
+index 5a84f9b..5bb6e0e 100644
+--- a/products/AndroidProducts.mk
++++ b/products/AndroidProducts.mk
+@@ -6,7 +6,6 @@ PRODUCT_MAKEFILES := \
+     $(LOCAL_DIR)/d2tmo.mk \
+     $(LOCAL_DIR)/d2usc.mk \
+     $(LOCAL_DIR)/d2vzw.mk \
+-    $(LOCAL_DIR)/evita.mk \
+     $(LOCAL_DIR)/galaxysmtd.mk \
+     $(LOCAL_DIR)/fascinatemtd.mk \
+     $(LOCAL_DIR)/galaxysmtd.mk \
+@@ -27,4 +26,6 @@ PRODUCT_MAKEFILES := \
+     $(LOCAL_DIR)/tf101.mk \
+     $(LOCAL_DIR)/toro.mk \
+     $(LOCAL_DIR)/toroplus.mk \
+-    $(LOCAL_DIR)/vibrantmtd.mk
++    $(LOCAL_DIR)/vibrantmtd.mk \
++    $(LOCAL_DIR)/shooter.mk \
++    $(LOCAL_DIR)/shooteru.mk
+diff --git a/products/shooter.mk b/products/shooter.mk
+new file mode 100644
+index 0000000..f80e764
+--- /dev/null
++++ b/products/shooter.mk
+@@ -0,0 +1,8 @@
++# Inherit AOSP device configuration for maguro.
++$(call inherit-product, device/htc/shooter/aokp.mk)
++
++# Inherit common product files.
++$(call inherit-product, vendor/aokp/configs/common_phone.mk)
++
++# Inherit CDMA common stuff
++$(call inherit-product, vendor/aokp/configs/cdma.mk)
+diff --git a/products/shooteru.mk b/products/shooteru.mk
+new file mode 100644
+index 0000000..22e9e1f
+--- /dev/null
++++ b/products/shooteru.mk
+@@ -0,0 +1,8 @@
++# Inherit AOSP device configuration for maguro.
++$(call inherit-product, device/htc/shooteru/aokp.mk)
++
++# Inherit common product files.
++$(call inherit-product, vendor/aokp/configs/common_phone.mk)
++
++# Inherit GSM common stuff
++$(call inherit-product, vendor/aokp/configs/gsm.mk)
+diff --git a/tools/opticharger b/tools/opticharger
+index 2e39bd4..0bfb761 100755
+--- a/tools/opticharger
++++ b/tools/opticharger
+@@ -142,8 +142,8 @@ then
+ 
+     [ $QUIET ] || echo $CL_YLW"Resigning with cert: `echo $CERT`"$CL_RST
+ 
+-    [ $QUIET ] || echo java -jar $ANDROID_BUILD_TOP/out/host/$OUT_TARGET_HOST/framework/signapk.jar $ANDROID_BUILD_TOP/$CERT $ANDROID_BUILD_TOP/$KEY $NAME signed_$NAME
+-    java -jar $ANDROID_BUILD_TOP/out/host/$OUT_TARGET_HOST/framework/signapk.jar $ANDROID_BUILD_TOP/$CERT $ANDROID_BUILD_TOP/$KEY $NAME signed_$NAME
++    [ $QUIET ] || echo java -jar $ANDROID_HOST_OUT/framework/signapk.jar $ANDROID_BUILD_TOP/$CERT $ANDROID_BUILD_TOP/$KEY $NAME signed_$NAME
++    java -jar $ANDROID_HOST_OUT/framework/signapk.jar $ANDROID_BUILD_TOP/$CERT $ANDROID_BUILD_TOP/$KEY $NAME signed_$NAME
+     [ $QUIET ] || echo $CL_GRN"Zipalign.."$CL_RST
+     zipalign -f 4 signed_$NAME $BASE/$1
+     if [ ! $QUIET ]; then
+diff --git a/tools/squisher b/tools/squisher
+index 5b7342b..7ac00e6 100755
+--- a/tools/squisher
++++ b/tools/squisher
+@@ -171,7 +171,7 @@ echo
+ echo $CL_CYN"Signing package..."$CL_RST
+ SECURITYDIR=$ANDROID_BUILD_TOP/build/target/product/security
+ java -Xmx1024m \
+-	-jar $ANDROID_BUILD_TOP/out/host/$OUT_TARGET_HOST/framework/signapk.jar \
++	-jar $OUT/../../../host/$OUT_TARGET_HOST/framework/signapk.jar \
+ 	-w $SECURITYDIR/testkey.x509.pem $SECURITYDIR/testkey.pk8 \
+ 	$REPACK/update.zip $OUTFILE
+ echo
